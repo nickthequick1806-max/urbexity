@@ -20,7 +20,6 @@ function dbStub({ first = () => null, all = () => ({ results: [] }), onRun = () 
 function env(database = dbStub()) {
   return {
     DB: database,
-    MEDIA: { get: async () => null, delete: async () => {}, put: async () => {} },
     ASSETS: { fetch: async () => new Response("spa") },
     APP_ORIGIN: "https://urbexity.example",
     PUBLIC_MAP_TILE_URL: "https://tiles.example/{z}/{x}/{y}.png"
@@ -47,6 +46,17 @@ test("public places endpoint returns an empty, paginated live result", async () 
   assert.deepEqual(payload.data, []);
   assert.equal(payload.pagination.limit, 12);
   assert.equal(payload.pagination.total, 0);
+});
+
+test("market filters are parameterized and price sorting uses an allowlist", async () => {
+  let querySql = "", queryValues = [];
+  const database = dbStub({ all: (sql, values) => { querySql = sql; queryValues = values; return { results: [] }; } });
+  const response = await worker.fetch(new Request("https://urbexity.example/api/v1/market?q=map&category=digital_map&sort=price_low"), env(database));
+  assert.equal(response.status, 200);
+  assert.match(querySql, /l\.title LIKE \?/);
+  assert.match(querySql, /ORDER BY l\.price_cents ASC/);
+  assert.deepEqual(queryValues, ["%map%", "%map%", "digital_map"]);
+  assert.equal((await response.json()).checkoutEnabled, false);
 });
 
 test("private locations are indistinguishable from missing locations to anonymous users", async () => {
@@ -88,16 +98,27 @@ test("an unverified bootstrap administrator email receives no admin privileges",
   assert.equal(insertedAdminFlag, 0);
 });
 
-test("private image objects are not delivered to anonymous users", async () => {
+test("private D1 image blobs are not delivered to anonymous users", async () => {
   const database = dbStub({
     first: (sql) => sql.includes("place_photos p JOIN places")
       ? { owner_id: "u1", visibility: "private", status: "approved", moderation_status: "approved" }
       : null
   });
-  const bindings = env(database);
-  bindings.MEDIA.get = async () => ({ body: "private", httpMetadata: { contentType: "image/jpeg" } });
-  const response = await worker.fetch(new Request("https://urbexity.example/media/places/p1/photo.jpg"), bindings);
+  const response = await worker.fetch(new Request("https://urbexity.example/media/places/p1/photo.jpg"), env(database));
   assert.equal(response.status, 404);
+});
+
+test("approved image bytes are returned from the D1 media table", async () => {
+  const bytes = new Uint8Array([137, 80, 78, 71]);
+  const database = dbStub({ first: (sql) => {
+    if (sql.includes("place_photos p JOIN places")) return { owner_id: "u1", visibility: "public", status: "approved", moderation_status: "approved" };
+    if (sql.includes("FROM media_objects")) return { content_type: "image/png", body: bytes };
+    return null;
+  }});
+  const response = await worker.fetch(new Request("https://urbexity.example/media/places/p1/photo.png"), env(database));
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("content-type"), "image/png");
+  assert.deepEqual(new Uint8Array(await response.arrayBuffer()), bytes);
 });
 
 test("API keys cannot use endpoints outside their scopes", async () => {

@@ -23,7 +23,7 @@ Email delivery uses Resend when RESEND_API_KEY is installed. Without it, verific
 
 | Method | Route | Parameters / response |
 |---|---|---|
-| GET | /health | Worker/D1/R2 binding status |
+| GET | /health | Worker and D1 availability status |
 | GET | /config | Public tile URL and attribution |
 | GET | /stats | Live public user/place/map/photo totals |
 | GET | /categories | Supported place categories |
@@ -34,12 +34,12 @@ Email delivery uses Resend when RESEND_API_KEY is installed. Without it, verific
 | GET | /users/{username}/places | Approved public uploads |
 | GET | /users/{username}/maps | Public maps |
 | GET | /users/{username}/activity | Visibility-filtered activity |
-| GET | /maps | Public maps, page and limit |
+| GET | /maps | Public maps, page and limit; authenticated owners can request ?mine=1 for all their maps |
 | GET | /maps/{id-or-slug} | Public/unlisted map; private map requires owner |
 | GET | /feed | Public posts, page and limit |
 | GET | /leaderboards | period=week/month/year/all, category=places/views/photos/likes |
 | GET | /search | q; public places, users, and maps |
-| GET | /market | Published listings; checkoutEnabled is false |
+| GET | /market | Published listings; optional q/category/sort filters; checkoutEnabled is false |
 
 Example place listing:
 
@@ -57,19 +57,27 @@ Mutating browser requests need a session cookie and same-site Origin.
 | GET | /profile/export | Own profile/content/social-data export |
 | POST | /places | Submit place; starts pending moderation |
 | PATCH/DELETE | /places/{id} | Owner/admin edits |
-| POST | /places/{id}/photos | Multipart file, JPEG/PNG/WebP/AVIF, max 8 MiB |
+| POST | /places/{id}/photos | Multipart file, JPEG/PNG/WebP/AVIF, max 1.8 MB; stored as a protected D1 BLOB |
 | POST | /places/{id}/like or /bookmark | Toggle engagement |
 | GET/POST | /places/{id}/comments | Read or add note |
 | POST | /users/{username}/follow or /block | Toggle social relationship |
 | GET/POST | /maps | List or create a collection |
 | POST | /maps/{id}/places | Add a location (owner only) |
+| POST | /maps/{id}/follow | Follow or unfollow a public map |
+| PATCH/DELETE | /maps/{id} | Edit or delete an owned map |
 | DELETE | /maps/{id}/places/{placeId} | Remove a location (owner only) |
 | GET/POST | /feed | Read or create a text post |
 | GET/POST | /messages | Private conversations |
 | GET | /messages/{conversationId} | Participant only |
 | GET/POST | /notifications | Own notifications / mark all read |
 | POST | /reports | Submit a moderation/privacy report |
-| GET/POST | /market | Read listings or create a draft |
+| GET/POST | /market | Search/filter published listings or create a draft |
+| GET | /market/mine | Own listings, including drafts and archived listings |
+| GET/PATCH/DELETE | /market/{id} | Listing details; owner may edit or archive; checkout stays disabled |
+
+## Image storage
+
+Image bytes are BLOBs in D1. Uploads must be under 1.8 MB and total media BLOBs are capped at 350 MiB by the application. Pending moderation and private media is owner-only; approved follower-only feed photos require a follower relationship.
 
 ## API keys
 

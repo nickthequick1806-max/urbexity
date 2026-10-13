@@ -1,5 +1,22 @@
 PRAGMA foreign_keys = ON;
 
+CREATE TABLE media_objects (
+  object_key TEXT PRIMARY KEY,
+  owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  content_type TEXT NOT NULL,
+  body BLOB NOT NULL,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX media_objects_owner_idx ON media_objects(owner_id);
+CREATE TABLE media_storage_usage (id INTEGER PRIMARY KEY CHECK(id=1), used_bytes INTEGER NOT NULL DEFAULT 0 CHECK(used_bytes>=0));
+INSERT INTO media_storage_usage(id,used_bytes) VALUES(1,0);
+CREATE TRIGGER media_objects_count_insert AFTER INSERT ON media_objects BEGIN
+  UPDATE media_storage_usage SET used_bytes=used_bytes+length(NEW.body) WHERE id=1;
+END;
+CREATE TRIGGER media_objects_count_delete AFTER DELETE ON media_objects BEGIN
+  UPDATE media_storage_usage SET used_bytes=used_bytes-length(OLD.body) WHERE id=1;
+END;
+
 CREATE TABLE users (
   id TEXT PRIMARY KEY,
   email TEXT NOT NULL COLLATE NOCASE UNIQUE,
@@ -11,6 +28,7 @@ CREATE TABLE users (
   bio TEXT NOT NULL DEFAULT '',
   location_label TEXT NOT NULL DEFAULT '',
   website_url TEXT NOT NULL DEFAULT '',
+  social_links_json TEXT NOT NULL DEFAULT '{}',
   profile_visibility TEXT NOT NULL DEFAULT 'public' CHECK(profile_visibility IN ('public','private')),
   activity_visibility TEXT NOT NULL DEFAULT 'public' CHECK(activity_visibility IN ('public','private','followers')),
   email_verified_at TEXT,
@@ -126,7 +144,7 @@ CREATE TABLE post_photos (id TEXT PRIMARY KEY,post_id TEXT NOT NULL REFERENCES f
 CREATE TABLE post_likes (post_id TEXT NOT NULL REFERENCES feed_posts(id) ON DELETE CASCADE,user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,created_at TEXT NOT NULL,PRIMARY KEY(post_id,user_id));
 CREATE TABLE conversations (id TEXT PRIMARY KEY,created_at TEXT NOT NULL,UNIQUE(id));
 CREATE TABLE conversation_members (conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,last_read_at TEXT,PRIMARY KEY(conversation_id,user_id));
-CREATE TABLE messages (id TEXT PRIMARY KEY,conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,sender_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,body TEXT NOT NULL,created_at TEXT NOT NULL);
+CREATE TABLE messages (id TEXT PRIMARY KEY,conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,sender_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,body TEXT NOT NULL,read_at TEXT,created_at TEXT NOT NULL);
 CREATE INDEX messages_conversation_idx ON messages(conversation_id,created_at DESC);
 CREATE TABLE notifications (id TEXT PRIMARY KEY,user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,actor_id TEXT REFERENCES users(id) ON DELETE SET NULL,type TEXT NOT NULL,entity_id TEXT,read_at TEXT,created_at TEXT NOT NULL);
 CREATE INDEX notifications_user_idx ON notifications(user_id,created_at DESC);

@@ -13,12 +13,8 @@
   "d1_databases": [
     { "binding": "DB", "database_name": "urbexity-db", "database_id": "REPLACE_WITH_D1_DATABASE_ID", "migrations_dir": "migrations" }
   ],
-  "r2_buckets": [
-    { "binding": "MEDIA", "bucket_name": "urbexity-media" }
-  ],
   "vars": {
     "APP_ORIGIN": "http://localhost:8787",
-    "ASSET_BASE_URL": "/media",
     "ADMIN_EMAILS": "",
     "PUBLIC_MAP_TILE_URL": "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
     "EMAIL_FROM": "Urbexity <noreply@example.com>"

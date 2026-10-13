@@ -1,14 +1,15 @@
 # Cloudflare deployment
 
-The Cloudflare Worker serves both the browser application and API. GitHub Pages is not used for runtime because it cannot execute D1/R2 business logic.
+The Cloudflare Worker serves both the browser application and API. GitHub Pages is not used for runtime because it cannot execute the D1-backed business logic.
 
 ## Provision
 
 1. Create a Cloudflare D1 database named urbexity-db.
-2. Create an R2 bucket named urbexity-media.
-3. Replace REPLACE_WITH_D1_DATABASE_ID in wrangler.jsonc with the real database ID.
-4. Set APP_ORIGIN to the exact production origin.
-5. Choose a tile provider and set PUBLIC_MAP_TILE_URL. Retain attribution and follow its terms; for production volume use a tile service intended for production traffic.
+2. Replace REPLACE_WITH_D1_DATABASE_ID in wrangler.jsonc with the real database ID.
+3. Set APP_ORIGIN to the exact production origin.
+4. Choose a tile provider and set PUBLIC_MAP_TILE_URL. Retain attribution and follow its terms; for production volume use a tile service intended for production traffic.
+
+Use Cloudflare Workers Free and D1 only. Uploaded image bytes are stored as D1 BLOBs. Each image is limited to 1.8 MB to remain under D1's 2,000,000-byte BLOB/row limit. An application guard caps all image BLOBs at 350 MiB, leaving space for relational data in the 500 MB free-plan database. Cloudflare currently documents a 5 GB total D1 account storage allowance on Workers Free; other databases in the same account share it. When free-plan daily D1 limits are reached, queries fail until reset rather than becoming paid overage, so the app may become temporarily unavailable. See [D1 pricing](https://developers.cloudflare.com/d1/platform/pricing/) and [D1 limits](https://developers.cloudflare.com/d1/platform/limits/).
 
 ## Migrations and local development
 
@@ -19,7 +20,7 @@ The Cloudflare Worker serves both the browser application and API. GitHub Pages 
 
 Review migrations before applying to any existing database. Migration 0001 is for a new Urbexity database.
 
-Create an ignored .dev.vars for local values, then run npm run dev. Local sessions use Secure cookie attributes; modern browsers treat localhost as secure. Use test-only accounts and local D1/R2.
+Create an ignored .dev.vars for local values, then run npm run dev. Local sessions use Secure cookie attributes; modern browsers treat localhost as secure. Use test-only accounts and local D1.
 
 ## Worker configuration
 
@@ -29,7 +30,6 @@ Set non-secret variables in Wrangler or Cloudflare:
 - PUBLIC_MAP_TILE_URL
 - ADMIN_EMAILS: bootstrap admin email list. An account receives administrator access only after verifying a matching email address.
 - EMAIL_FROM: verified sender address.
-- Optional ASSET_BASE_URL if serving media through a custom R2 domain.
 
 Install secrets using npx wrangler secret put NAME:
 
@@ -50,7 +50,7 @@ After deployment, verify /api/health, registration and email delivery, login/log
 
 Add repository secrets CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID. The workflow tests and dry-run bundles before deployment on pushes to main. D1 IDs and Worker variables must already be configured.
 
-Keep the R2 bucket private behind the Worker /media route. Resend must authorize EMAIL_FROM. Verify email flows in staging before relying on account recovery.
+Media BLOBs are served through the Worker /media route with per-object authorization. Resend must authorize EMAIL_FROM. Verify email flows in staging before relying on account recovery.
 
 ## Discord delivery
 
