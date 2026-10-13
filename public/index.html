@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#101112"><meta name="description" content="Urbexity is a community for documenting places with care, context, and respect.">
+  <title>Urbexity — Explore with care</title><link rel="icon" href="/favicon.png" type="image/png">
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.css" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.css" crossorigin="anonymous">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="Urbexity home"><img src="/urbexity-logo.png" alt="" width="38" height="38"><span>URBEXITY</span></a>
+      <nav class="main-nav" aria-label="Main navigation">
+        <a href="/" data-route="/">Explore</a><a href="/discover" data-route="/discover">Discover</a><a href="/feed" data-route="/feed">Field feed</a><a href="/maps" data-route="/maps">Collections</a><a href="/journal" data-route="/journal">Journal</a><a href="/leaderboard" data-route="/leaderboard">Contributors</a><a href="/market" data-route="/market">Market</a>
+      </nav>
+      <div class="top-actions"><button class="icon-button" data-action="search" aria-label="Search">⌕</button><a class="avatar-small" href="/settings" data-route="/settings" data-auth-only hidden>U</a><button class="button button-quiet" data-action="login" data-auth-guest>Sign in</button><button class="button button-primary" data-action="register" data-auth-guest>Join Urbexity</button><button class="button button-quiet" data-action="logout" data-auth-only hidden>Sign out</button><button class="menu-toggle" data-action="menu" aria-label="Open navigation">☰</button></div>
+    </header>
+    <main id="main" tabindex="-1" aria-live="polite"></main>
+    <footer class="footer"><div class="footer-brand"><img src="/urbexity-logo.png" alt="" width="25"><span>URBEXITY</span></div><p>Document places with care. Respect people, property, and local law.</p><div><a href="/journal/community-guidelines" data-route="/journal/community-guidelines">Community guidelines</a><a href="/journal/privacy" data-route="/journal/privacy">Privacy</a><a href="/journal/api" data-route="/journal/api">API docs</a></div></footer>
+  </div>
+  <div id="modal-root"></div><div id="toast-region" class="toast-region" role="status" aria-live="polite"></div>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.js" crossorigin="anonymous"></script>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,27 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "urbexity-api",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-10-13",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*", "/media/*"]
+  },
+  "d1_databases": [
+    { "binding": "DB", "database_name": "urbexity-db", "database_id": "REPLACE_WITH_D1_DATABASE_ID", "migrations_dir": "migrations" }
+  ],
+  "r2_buckets": [
+    { "binding": "MEDIA", "bucket_name": "urbexity-media" }
+  ],
+  "vars": {
+    "APP_ORIGIN": "http://localhost:8787",
+    "ASSET_BASE_URL": "/media",
+    "ADMIN_EMAILS": "",
+    "PUBLIC_MAP_TILE_URL": "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+    "EMAIL_FROM": "Urbexity <noreply@example.com>"
+  },
+  "triggers": { "crons": ["*/5 * * * *"] }
+}
