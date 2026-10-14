@@ -14,7 +14,8 @@
     { "binding": "DB", "database_name": "urbexity-db", "database_id": "36b67714-6b53-49c1-9af7-78c0d460fc7f", "migrations_dir": "migrations" }
   ],
   "vars": {
-    "APP_ORIGIN": "",
+    "APP_ORIGIN": "https://nickthequick1806-max.github.io",
+    "CROSS_SITE_COOKIES": "true",
     "ADMIN_EMAILS": "",
     "PUBLIC_MAP_TILE_URL": "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
     "EMAIL_FROM": "Urbexity <noreply@example.com>"

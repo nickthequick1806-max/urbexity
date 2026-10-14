@@ -1,6 +1,6 @@
 # Urbexity
 
-Urbexity is a responsive urban-exploration documentation and discovery platform. It uses an original charcoal-and-red identity with the supplied Urbexity logo. A Cloudflare Worker serves the static interface and versioned API; D1 stores both structured records and image BLOBs; the deployment has no R2 dependency.
+Urbexity is a responsive urban-exploration documentation and discovery platform. It uses an original charcoal-and-red identity with the supplied Urbexity logo. GitHub Pages serves the frontend, a Cloudflare Worker serves the versioned API, and D1 stores structured records and image BLOBs. The deployment has no R2 dependency.
 
 ## Included
 
@@ -43,4 +43,4 @@ Only approved public places appear in public lists. Private places and collectio
 
 ## External setup status
 
-This workspace has no Cloudflare, email, Discord, OAuth, or GitHub deployment credentials. Deployment is not claimed. Follow DEPLOYMENT.md after provisioning.
+The GitHub Pages site and Worker require a configured `URBEXITY_API_ORIGIN` repository variable and Cloudflare deployment secrets. Email and Discord integrations remain disabled until their provider secrets are configured. See DEPLOYMENT.md for the current setup and verification steps.

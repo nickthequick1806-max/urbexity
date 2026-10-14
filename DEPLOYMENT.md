@@ -1,62 +1,40 @@
-# Cloudflare deployment
+# Deployment
 
-The Cloudflare Worker serves both the browser application and API. GitHub Pages is not used for runtime because it cannot execute the D1-backed business logic.
+## Architecture
 
-## Provision
+- The public `urbexity` GitHub repository publishes `public/` to GitHub Pages at `https://nickthequick1806-max.github.io/urbexity/`.
+- `urbexity-api` is a Cloudflare Worker backend. It is bound to the separate `urbexity-db` D1 database; the Worker also serves D1-backed image BLOBs. There is no R2 binding or R2 code.
+- The Pages frontend calls the Worker using the `URBEXITY_API_ORIGIN` GitHub repository variable. The Worker `APP_ORIGIN` is the exact Pages origin and cross-origin requests are credentialed and allowlisted. The frontend uses the `/urbexity/` Pages project base path and an SPA `404.html` fallback.
 
-1. The Urbexity D1 database is provisioned as `urbexity-db`; its ID is in `wrangler.jsonc`.
-2. `APP_ORIGIN` may remain empty for the default `workers.dev` hostname; the Worker derives its request origin for same-origin checks and account links. Set it to the exact production origin only when using a custom domain or separate frontend.
-4. Choose a tile provider and set PUBLIC_MAP_TILE_URL. Retain attribution and follow its terms; for production volume use a tile service intended for production traffic.
+## Provisioned resources
 
-Use Cloudflare Workers Free and D1 only. Uploaded image bytes are stored as D1 BLOBs. Each image is limited to 1.8 MB to remain under D1's 2,000,000-byte BLOB/row limit. An application guard caps all image BLOBs at 350 MiB, leaving space for relational data in the 500 MB free-plan database. Cloudflare currently documents a 5 GB total D1 account storage allowance on Workers Free; other databases in the same account share it. When free-plan daily D1 limits are reached, queries fail until reset rather than becoming paid overage, so the app may become temporarily unavailable. See [D1 pricing](https://developers.cloudflare.com/d1/platform/pricing/) and [D1 limits](https://developers.cloudflare.com/d1/platform/limits/).
+The Cloudflare account already contains a dedicated D1 database named `urbexity-db`, ID `36b67714-6b53-49c1-9af7-78c0d460fc7f`. Migration `0001_initial.sql` was applied in the D1 console and recorded in `d1_migrations`; no data from Multistreams was used. The Worker is not deployed yet.
 
-## Migrations and local development
+Cloudflare Workers Free and D1 are the only application storage. Each image is limited to 1.8 MB to remain under D1's 2,000,000-byte BLOB/row limit. The application caps stored images at 350 MiB, leaving room for relational records. D1 storage and daily query limits are account-wide; requests can fail when free plan limits are reached. Review current [D1 pricing](https://developers.cloudflare.com/d1/platform/pricing/) and [D1 limits](https://developers.cloudflare.com/d1/platform/limits/).
 
-    npm install
-    npm run db:local
-    npm run build
-    npm run db:remote
+## Remaining deployment setup
 
-Review migrations before applying to any existing database. Migration 0001 is for a new Urbexity database.
+1. Enable GitHub Pages for this repository with **Build and deployment → Source: GitHub Actions**.
+2. Configure the Cloudflare Worker deploy secrets in the GitHub repository: `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`. Limit the token to this account's Worker deployment needs; never commit it.
+3. Configure the GitHub repository variable `URBEXITY_API_ORIGIN` to the deployed Worker origin, for example `https://urbexity-api.<your-workers-subdomain>.workers.dev`.
+4. Run the Worker deploy workflow and Pages workflow from `main`. Verify the health endpoint and Pages frontend, then confirm API responses include credentialed CORS only for the Pages origin.
+5. For reliable cross-site account cookies, a first-party custom domain shared by frontend and API is recommended. The current GitHub Pages and `workers.dev` hosts are separate sites; some browsers block third-party cookies even when the API sets `SameSite=None`.
+6. Select a tile provider for expected production traffic. The default OpenStreetMap tile URL requires attribution and should not be used at unapproved volume.
 
-Create an ignored .dev.vars for local values, then run npm run dev. Local sessions use Secure cookie attributes; modern browsers treat localhost as secure. Use test-only accounts and local D1.
+Create an ignored `.dev.vars` for local values, then run `npm run dev`. Local cookies use `Secure`; modern browsers treat localhost as secure. Use test-only accounts and the local D1 database.
 
-## Worker configuration
+## Email, admin, and Discord
 
-Set non-secret variables in Wrangler or Cloudflare:
+Set `ADMIN_EMAILS` to the intended administrator emails. An account receives administrator access only after verifying a matching address. Set `EMAIL_FROM` to a verified sender and store `RESEND_API_KEY` as a Cloudflare Worker secret to enable registration verification and password recovery. Without the email provider, those messages are not sent.
 
-- APP_ORIGIN
-- PUBLIC_MAP_TILE_URL
-- ADMIN_EMAILS: bootstrap admin email list. An account receives administrator access only after verifying a matching email address.
-- EMAIL_FROM: verified sender address.
+Set `DISCORD_WEBHOOK_URL` as a Cloudflare Worker secret to deliver the optional approval notices. Generic service subscriptions are configured through the admin API; store the returned HMAC signing secret at the receiver. Check `webhook_deliveries` for actual delivery status. No email or Discord delivery is claimed until verified.
 
-Install secrets using npx wrangler secret put NAME:
+Google OAuth and Turnstile are not implemented in this build. Payment checkout is disabled. KITE API endpoints and scoped keys are implemented, but the Discord bot commands still need to be installed in the bot project.
 
-- RESEND_API_KEY: enables verification and password-reset email.
-- DISCORD_WEBHOOK_URL: optional direct Discord channel webhook. It is server-only and notices are queued only after public place approval.
+## Validate and verify
 
-Google OAuth and Turnstile are not implemented in this initial build; do not configure credentials for inactive flows.
-
-## Deploy and verify
-
+    npm ci
     npm run check
     npm run build
-    npm run deploy
 
-After deployment, verify /api/health, registration and email delivery, login/logout, private-place rejection, public-place moderation, photo moderation, and a webhook delivery/retry in the intended account. A local build is not proof of deployment.
-
-## GitHub Actions
-
-Add repository secrets CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID. The workflow tests and dry-run bundles before deployment on pushes to main. D1 IDs and Worker variables must already be configured.
-
-Media BLOBs are served through the Worker /media route with per-object authorization. Resend must authorize EMAIL_FROM. Verify email flows in staging before relying on account recovery.
-
-## Discord delivery
-
-DISCORD_WEBHOOK_URL is stored as a Cloudflare secret; it is never returned to the browser. Delivery status and attempts are stored in webhook_deliveries. Cron runs every five minutes with at most eight attempts. Check those rows before reporting delivery.
-
-Service webhook subscriptions use POST /api/v1/admin/webhooks and HMAC signatures. Save the returned signingSecret in the receiver and verify the exact-body signature.
-
-## Separate GitHub repository
-
-Create a separate repository named urbexity, then add it as this checkout's origin and push the reviewed branch. This checkout can be initialized independently; GitHub permissions are required to create and push. Never point the remote to multistreams.tv.
+The GitHub Actions workflow validates and dry-run bundles the Worker before deployment. The Pages workflow deploys the static frontend. After both succeed, verify `/api/health`, registration and email delivery, login/logout, private-place rejection, moderation, approved photo reads, and webhook delivery/retry in the intended account. A local build or a successful Pages publish alone is not proof of live backend functionality.

@@ -22,7 +22,16 @@ const appOrigin = (request, env) => env.APP_ORIGIN || new URL(request.url).origi
 const exactOrigin = (request, env) => request.headers.get("origin") === appOrigin(request, env);
 const ensureOrigin = (request, env) => { if (request.headers.get("origin") && !exactOrigin(request, env)) fail(403, "origin_forbidden", "Request origin is not allowed."); };
 const parseCookies = (request) => Object.fromEntries((request.headers.get("cookie") || "").split(";").map((part) => { const i = part.indexOf("="); return i > 0 ? [part.slice(0, i).trim(), decodeURIComponent(part.slice(i + 1).trim())] : ["", ""]; }).filter(([k]) => k));
-const cookieHeader = (env, token, expire = false) => `${COOKIE}=${expire ? "" : encodeURIComponent(token)}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${expire ? 0 : SESSION_DAYS * 86400}`;
+const cookieHeader = (env, token, expire = false) => `${COOKIE}=${expire ? "" : encodeURIComponent(token)}; Path=/; HttpOnly; Secure; SameSite=${env.CROSS_SITE_COOKIES === "true" ? "None" : "Lax"}; Max-Age=${expire ? 0 : SESSION_DAYS * 86400}`;
+const corsResponse = (response, request, env) => {
+  const origin = request.headers.get("origin");
+  if (!origin || !exactOrigin(request, env)) return response;
+  const headers = new Headers(response.headers);
+  headers.set("access-control-allow-origin", origin);
+  headers.set("access-control-allow-credentials", "true");
+  headers.append("vary", "Origin");
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+};
 const bodyJson = async (request) => { const len = Number(request.headers.get("content-length") || 0); if (len > MAX_JSON) fail(413, "body_too_large", "Request body is too large."); try { return await request.json(); } catch { fail(400, "invalid_json", "Request body must be valid JSON."); } };
 const pbkdf2 = async (password, salt) => {
   const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveBits"]);
@@ -64,7 +73,7 @@ async function sendEmail(env, to, subject, text) {
 async function issueAuthToken(request, env, user, purpose) {
   const token = randomToken(); const timestamp = now(); const expires = new Date(Date.now() + 60 * 60 * 1000).toISOString();
   await env.DB.prepare("INSERT INTO auth_tokens(id,user_id,token_hash,purpose,expires_at,created_at) VALUES(?1,?2,?3,?4,?5,?6)").bind(id(), user.id, await digest(token), purpose, expires, timestamp).run();
-  return `${appOrigin(request, env)}/api/v1/auth/${purpose === "verify_email" ? "verify" : "reset"}?token=${encodeURIComponent(token)}`;
+  return `${new URL(request.url).origin}/api/v1/auth/${purpose === "verify_email" ? "verify" : "reset"}?token=${encodeURIComponent(token)}`;
 }
 async function authRoute(request, env, path, user) {
   const method = request.method;
@@ -327,18 +336,18 @@ export default {
   async fetch(request,env,ctx){
     const url=new URL(request.url),path=url.pathname;
     try {
-      if(path.startsWith("/media/")){const key=decodeURIComponent(path.slice(7));if(!/^[a-zA-Z0-9/_-]+\.(jpg|png|webp|avif)$/.test(key))fail(404,"media_not_found","Media was not found.");return await mediaResponse(request,env,key);}
+      if(path.startsWith("/media/")){const key=decodeURIComponent(path.slice(7));if(!/^[a-zA-Z0-9/_-]+\.(jpg|png|webp|avif)$/.test(key))fail(404,"media_not_found","Media was not found.");return corsResponse(await mediaResponse(request,env,key),request,env);}
       if(path.startsWith("/api/")){
-        if(request.method==="OPTIONS"){const origin=request.headers.get("origin");if(origin&&origin!==appOrigin(request,env))fail(403,"origin_forbidden","Request origin is not allowed.");return new Response(null,{status:204,headers:{"access-control-allow-origin":origin||appOrigin(request,env),"access-control-allow-methods":"GET,POST,PATCH,DELETE,OPTIONS","access-control-allow-headers":"content-type,authorization","access-control-allow-credentials":"true","access-control-max-age":"600"}});}
-        const user=await authenticate(request,env);const keyed=await apiKeyRoute(request,env,path,user);if(keyed)return keyed;
-        const response=await publicApi(request,env,path,user);if(response)return response;
-        if(path.startsWith("/api/v1/admin/")&&request.headers.has("authorization")){const response=await publicApi(request,env,path,user);if(response)return response;}
+        if(request.method==="OPTIONS"){const origin=request.headers.get("origin");if(origin&&origin!==appOrigin(request,env))fail(403,"origin_forbidden","Request origin is not allowed.");return corsResponse(new Response(null,{status:204,headers:{"access-control-allow-origin":origin||appOrigin(request,env),"access-control-allow-methods":"GET,POST,PATCH,DELETE,OPTIONS","access-control-allow-headers":"content-type,authorization","access-control-allow-credentials":"true","access-control-max-age":"600"}}),request,env);}
+        const user=await authenticate(request,env);const keyed=await apiKeyRoute(request,env,path,user);if(keyed)return corsResponse(keyed,request,env);
+        const response=await publicApi(request,env,path,user);if(response)return corsResponse(response,request,env);
+        if(path.startsWith("/api/v1/admin/")&&request.headers.has("authorization")){const response=await publicApi(request,env,path,user);if(response)return corsResponse(response,request,env);}
         fail(404,"route_not_found","No API route matches this request.");
       }
       return env.ASSETS.fetch(request);
     } catch(error) {
-      if(error instanceof HttpError)return json({error:{code:error.code,message:error.message}},error.status);
-      console.error("request_failed",{path,method:request.method,message:error?.message||"unknown"});return json({error:{code:"internal_error",message:"The request could not be completed."}},500);
+      if(error instanceof HttpError)return corsResponse(json({error:{code:error.code,message:error.message}},error.status),request,env);
+      console.error("request_failed",{path,method:request.method,message:error?.message||"unknown"});return corsResponse(json({error:{code:"internal_error",message:"The request could not be completed."}},500),request,env);
     }
   },
   async scheduled(_controller,env,ctx){ctx.waitUntil(retryWebhooks(env));}
