@@ -18,7 +18,8 @@ const fail = (status, code, message) => { throw new HttpError(status, code, mess
 const validUsername = (s) => /^[a-zA-Z0-9._-]{3,30}$/.test(s);
 const validEmail = (s) => /^[^\s@]{1,100}@[^\s@]{1,190}\.[^\s@]{2,}$/.test(s);
 const slugify = (s) => String(s).normalize("NFKD").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 70) || "place";
-const exactOrigin = (request, env) => request.headers.get("origin") === env.APP_ORIGIN;
+const appOrigin = (request, env) => env.APP_ORIGIN || new URL(request.url).origin;
+const exactOrigin = (request, env) => request.headers.get("origin") === appOrigin(request, env);
 const ensureOrigin = (request, env) => { if (request.headers.get("origin") && !exactOrigin(request, env)) fail(403, "origin_forbidden", "Request origin is not allowed."); };
 const parseCookies = (request) => Object.fromEntries((request.headers.get("cookie") || "").split(";").map((part) => { const i = part.indexOf("="); return i > 0 ? [part.slice(0, i).trim(), decodeURIComponent(part.slice(i + 1).trim())] : ["", ""]; }).filter(([k]) => k));
 const cookieHeader = (env, token, expire = false) => `${COOKIE}=${expire ? "" : encodeURIComponent(token)}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${expire ? 0 : SESSION_DAYS * 86400}`;
@@ -60,10 +61,10 @@ async function sendEmail(env, to, subject, text) {
   if (!response.ok) throw new Error(`email_provider_${response.status}`);
   return true;
 }
-async function issueAuthToken(env, user, purpose) {
+async function issueAuthToken(request, env, user, purpose) {
   const token = randomToken(); const timestamp = now(); const expires = new Date(Date.now() + 60 * 60 * 1000).toISOString();
   await env.DB.prepare("INSERT INTO auth_tokens(id,user_id,token_hash,purpose,expires_at,created_at) VALUES(?1,?2,?3,?4,?5,?6)").bind(id(), user.id, await digest(token), purpose, expires, timestamp).run();
-  return `${env.APP_ORIGIN}/api/v1/auth/${purpose === "verify_email" ? "verify" : "reset"}?token=${encodeURIComponent(token)}`;
+  return `${appOrigin(request, env)}/api/v1/auth/${purpose === "verify_email" ? "verify" : "reset"}?token=${encodeURIComponent(token)}`;
 }
 async function authRoute(request, env, path, user) {
   const method = request.method;
@@ -80,7 +81,7 @@ async function authRoute(request, env, path, user) {
     try { await env.DB.prepare("INSERT INTO users(id,email,username,password_hash,password_salt,is_admin,created_at,updated_at) VALUES(?1,?2,?3,?4,?5,?6,?7,?7)").bind(uid,email,username,hash,passwordSalt,isAdmin,timestamp).run(); }
     catch { fail(409, "account_exists", "That email or username is already registered."); }
     const newUser = { id: uid, email, username, is_admin: isAdmin };
-    try { const link = await issueAuthToken(env, newUser, "verify_email"); await sendEmail(env, email, "Verify your Urbexity account", `Confirm your email within one hour: ${link}`); } catch (e) { console.error("verification_email_failed", e.message); }
+    try { const link = await issueAuthToken(request, env, newUser, "verify_email"); await sendEmail(env, email, "Verify your Urbexity account", `Confirm your email within one hour: ${link}`); } catch (e) { console.error("verification_email_failed", e.message); }
     const session = await createSession(request, env, uid);
     await audit(env, uid, "account.created", "user", uid);
     return json({ ok: true, user: { id: uid, username, emailVerified: false }, verificationSent: Boolean(env.RESEND_API_KEY) }, 201, { "set-cookie": cookieHeader(env, session) });
@@ -104,15 +105,15 @@ async function authRoute(request, env, path, user) {
     if (!row) fail(400,"token_invalid","This verification link is invalid or expired.");
     const timestamp=now(),isAdmin=(env.ADMIN_EMAILS||"").split(",").map((s)=>s.trim().toLowerCase()).includes(String(row.email).toLowerCase())?1:0;
     await env.DB.batch([env.DB.prepare("UPDATE users SET email_verified_at=?1,is_admin=?2,updated_at=?1 WHERE id=?3").bind(timestamp,isAdmin,row.user_id),env.DB.prepare("UPDATE auth_tokens SET used_at=?1 WHERE id=?2").bind(timestamp,row.id)]);
-    return Response.redirect(`${env.APP_ORIGIN}/settings?verified=1`,303);
+    return Response.redirect(`${appOrigin(request, env)}/settings?verified=1`,303);
   }
   if (path === "/api/v1/auth/verify" && method === "POST") {
     ensureOrigin(request,env); needUser(user); if (user.email_verified_at) return json({ok:true,verified:true});
-    const row=await env.DB.prepare("SELECT id,email,username FROM users WHERE id=?1").bind(user.id).first(); const link=await issueAuthToken(env,row,"verify_email"); await sendEmail(env,row.email,"Verify your Urbexity account",`Confirm your email: ${link}`); return json({ok:true,sent:Boolean(env.RESEND_API_KEY)});
+    const row=await env.DB.prepare("SELECT id,email,username FROM users WHERE id=?1").bind(user.id).first(); const link=await issueAuthToken(request,env,row,"verify_email"); await sendEmail(env,row.email,"Verify your Urbexity account",`Confirm your email: ${link}`); return json({ok:true,sent:Boolean(env.RESEND_API_KEY)});
   }
   if (path === "/api/v1/auth/reset/request" && method === "POST") {
     ensureOrigin(request,env); await rateLimit(env,`reset:${request.headers.get("cf-connecting-ip")||"local"}`,5,3600); const b=await bodyJson(request); const email=String(b.email||"").trim().toLowerCase(); const row=await env.DB.prepare("SELECT id,email,username FROM users WHERE email=?1 COLLATE NOCASE").bind(email).first();
-    if(row) { const link=await issueAuthToken(env,row,"password_reset"); await sendEmail(env,email,"Reset your Urbexity password",`This link expires in one hour: ${link}`); }
+    if(row) { const link=await issueAuthToken(request,env,row,"password_reset"); await sendEmail(env,email,"Reset your Urbexity password",`This link expires in one hour: ${link}`); }
     return json({ok:true,message:"If the account exists, reset instructions will arrive by email."});
   }
   if (path === "/api/v1/auth/reset" && method === "POST") {
@@ -328,7 +329,7 @@ export default {
     try {
       if(path.startsWith("/media/")){const key=decodeURIComponent(path.slice(7));if(!/^[a-zA-Z0-9/_-]+\.(jpg|png|webp|avif)$/.test(key))fail(404,"media_not_found","Media was not found.");return await mediaResponse(request,env,key);}
       if(path.startsWith("/api/")){
-        if(request.method==="OPTIONS")return new Response(null,{status:204,headers:{"access-control-allow-origin":env.APP_ORIGIN,"access-control-allow-methods":"GET,POST,PATCH,DELETE,OPTIONS","access-control-allow-headers":"content-type,authorization","access-control-allow-credentials":"true","access-control-max-age":"600"}});
+        if(request.method==="OPTIONS"){const origin=request.headers.get("origin");if(origin&&origin!==appOrigin(request,env))fail(403,"origin_forbidden","Request origin is not allowed.");return new Response(null,{status:204,headers:{"access-control-allow-origin":origin||appOrigin(request,env),"access-control-allow-methods":"GET,POST,PATCH,DELETE,OPTIONS","access-control-allow-headers":"content-type,authorization","access-control-allow-credentials":"true","access-control-max-age":"600"}});}
         const user=await authenticate(request,env);const keyed=await apiKeyRoute(request,env,path,user);if(keyed)return keyed;
         const response=await publicApi(request,env,path,user);if(response)return response;
         if(path.startsWith("/api/v1/admin/")&&request.headers.has("authorization")){const response=await publicApi(request,env,path,user);if(response)return response;}

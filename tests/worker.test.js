@@ -21,7 +21,7 @@ function env(database = dbStub()) {
   return {
     DB: database,
     ASSETS: { fetch: async () => new Response("spa") },
-    APP_ORIGIN: "https://urbexity.example",
+    APP_ORIGIN: "",
     PUBLIC_MAP_TILE_URL: "https://tiles.example/{z}/{x}/{y}.png"
   };
 }
@@ -34,6 +34,26 @@ test("health endpoint reports service bindings without exposing configuration", 
   assert.equal(payload.database, true);
   assert.equal(payload.media, true);
   assert.equal(JSON.stringify(payload).includes("tiles.example"), false);
+});
+
+test("same-origin writes accept the deployed Worker origin when APP_ORIGIN is unset", async () => {
+  const response = await worker.fetch(new Request("https://urbexity.workers.dev/api/v1/places", {
+    method: "POST",
+    headers: { origin: "https://urbexity.workers.dev", "content-type": "application/json" },
+    body: JSON.stringify({ title: "Private place", latitude: 1, longitude: 2 })
+  }), env());
+  assert.equal(response.status, 401);
+  assert.equal((await response.json()).error.code, "authentication_required");
+});
+
+test("same-origin policy rejects a foreign origin when APP_ORIGIN is unset", async () => {
+  const response = await worker.fetch(new Request("https://urbexity.workers.dev/api/v1/places", {
+    method: "POST",
+    headers: { origin: "https://attacker.example", "content-type": "application/json" },
+    body: JSON.stringify({ title: "Private place", latitude: 1, longitude: 2 })
+  }), env());
+  assert.equal(response.status, 403);
+  assert.equal((await response.json()).error.code, "origin_forbidden");
 });
 
 test("public places endpoint returns an empty, paginated live result", async () => {

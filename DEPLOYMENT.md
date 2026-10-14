@@ -4,9 +4,8 @@ The Cloudflare Worker serves both the browser application and API. GitHub Pages 
 
 ## Provision
 
-1. Create a Cloudflare D1 database named urbexity-db.
-2. Replace REPLACE_WITH_D1_DATABASE_ID in wrangler.jsonc with the real database ID.
-3. Set APP_ORIGIN to the exact production origin.
+1. The Urbexity D1 database is provisioned as `urbexity-db`; its ID is in `wrangler.jsonc`.
+2. `APP_ORIGIN` may remain empty for the default `workers.dev` hostname; the Worker derives its request origin for same-origin checks and account links. Set it to the exact production origin only when using a custom domain or separate frontend.
 4. Choose a tile provider and set PUBLIC_MAP_TILE_URL. Retain attribution and follow its terms; for production volume use a tile service intended for production traffic.
 
 Use Cloudflare Workers Free and D1 only. Uploaded image bytes are stored as D1 BLOBs. Each image is limited to 1.8 MB to remain under D1's 2,000,000-byte BLOB/row limit. An application guard caps all image BLOBs at 350 MiB, leaving space for relational data in the 500 MB free-plan database. Cloudflare currently documents a 5 GB total D1 account storage allowance on Workers Free; other databases in the same account share it. When free-plan daily D1 limits are reached, queries fail until reset rather than becoming paid overage, so the app may become temporarily unavailable. See [D1 pricing](https://developers.cloudflare.com/d1/platform/pricing/) and [D1 limits](https://developers.cloudflare.com/d1/platform/limits/).

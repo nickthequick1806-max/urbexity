@@ -11,10 +11,10 @@
     "run_worker_first": ["/api/*", "/media/*"]
   },
   "d1_databases": [
-    { "binding": "DB", "database_name": "urbexity-db", "database_id": "REPLACE_WITH_D1_DATABASE_ID", "migrations_dir": "migrations" }
+    { "binding": "DB", "database_name": "urbexity-db", "database_id": "36b67714-6b53-49c1-9af7-78c0d460fc7f", "migrations_dir": "migrations" }
   ],
   "vars": {
-    "APP_ORIGIN": "http://localhost:8787",
+    "APP_ORIGIN": "",
     "ADMIN_EMAILS": "",
     "PUBLIC_MAP_TILE_URL": "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
     "EMAIL_FROM": "Urbexity <noreply@example.com>"
